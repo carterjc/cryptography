@@ -9,6 +9,9 @@ Issues with this program
 - create blocks char by char (inefficient + no padding)
 - does not work with high bit counts + would be slow
 - inconsistent typing, comments, etc
+- signature breaks like 40% of the time
+- class methods aren't the best probably
+- should separate rsa into rsa and rsa_client
 """
 from math import gcd, ceil
 from random import randrange
@@ -194,29 +197,45 @@ class RSA:
         assert gcd(phi, self.d) == 1
         assert (self.e * self.d) % phi == 1
 
-    def encrypt(self, m: str) -> List[int]:
+    @staticmethod
+    def encode_message(m: str) -> List[int]:
+        """
+        Take a str m and convert it into a list of integers
+        """
+        # bins = [ord(x) for x in m]
         # split into subgroups of length 1 (temporary)
-        bins = re.findall(".?", m)
+        bins = re.findall(".", m)
         # convert each bin of 1 char into an integer representation
         # note: doing it char by char simplifies code
         bins = list(map(lambda bin: string_to_int(bin), bins))
-        # encrypt each block
-        c = list(map(lambda bin: pow(bin, self.e, self.n), bins))
-        # if self.debug:
-        #     print(f"Computing m^e % n: {int_m}^{self.e} % {self.n}")
-        return c
+        return bins
 
-    def decrypt(self, c: str):
+    @staticmethod
+    def decode_message(c: List[int]) -> str:
+        """
+        Take a list of ints and return their str representation
+        """
+        # convert int representation to str
+        c_bins = list(map(lambda bin: int_to_string(bin), c))
+        # c_bins = [chr(x) for x in c]
+        return "".join(c_bins)
+
+    def encrypt(self, m: List[int]) -> List[int]:
+        """
+        Encrypt message parameter with class encryption key
+        """
+        # encrypt each block
+        return list(map(lambda bin: pow(bin, self.e, self.n), m))
+
+    def decrypt(self, c: List[int]):
         """
         Decrypt cipher text with class decryption key
         """
         # decrypt each block
-        c_bins = list(map(lambda bin: pow(bin, self.d, self.n), c))
-        # convert int representation to str
-        c_bins = list(map(lambda bin: int_to_string(bin), c_bins))
-        # concatenate list to get original message
-        return "".join(c_bins)
+        return list(map(lambda bin: pow(bin, self.d, self.n), c))
 
+
+# basic demo
 
 M = "IT'S ALL GREEK TO ME"
 
@@ -224,7 +243,36 @@ my_rsa = RSA()
 my_rsa.generate_primes()
 my_rsa.compute_e_d()
 print(my_rsa)
-cipher = my_rsa.encrypt(M)
+cipher = my_rsa.encrypt(RSA.encode_message(M))
 print(f"Ciphertext: {cipher}")
 plain = my_rsa.decrypt(cipher)
-print(f"Original message: {plain}")
+print(f"Original message: {RSA.decode_message(plain)}")
+
+# signature demo
+
+M = "signature demo"
+
+alice = RSA()
+alice.generate_primes()
+alice.compute_e_d()
+
+bob = RSA()
+bob.generate_primes()
+bob.compute_e_d()
+
+# bob's turn
+# S = D_B(M)
+bob_signature_bob = bob.decrypt(RSA.encode_message(M))
+print("Bob creates his signature:", bob_signature_bob, "\n")
+# C = E_A(S)
+bob_signature_encrypted = alice.encrypt(bob_signature_bob)
+print("Bob encrypts his signature with Alice's key:", bob_signature_encrypted, "\n")
+
+# alice's turn
+# S = D_A(C)
+bob_signature_alice = alice.decrypt(bob_signature_encrypted)
+print("Alice decrypts Bob's signature with her private key:", bob_signature_alice, "\n")
+assert bob_signature_bob == bob_signature_alice
+# M = E_B(S)
+bob_message = bob.encrypt(bob_signature_alice)
+print("Alice sees Bob's original message:", RSA.decode_message(bob_message))
